@@ -738,6 +738,7 @@ dependencies = [
 name = "modelers"
 version = "0.1.0"
 dependencies = [
+ "log",
  "wgpu",
  "winit",
 ]
