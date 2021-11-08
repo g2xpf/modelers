@@ -37,6 +37,8 @@ impl LoopClock {
     }
 
     pub fn tick(&mut self) -> Option<f32> {
+        self.accum_time += self.last_frame_inst.elapsed().as_secs_f32();
+        self.last_frame_inst = Instant::now();
         (self.frame_count == 100).then(|| {
             let average_frametime = self.accum_time * 1000.0 / self.frame_count as f32;
             self.accum_time = 0.0;

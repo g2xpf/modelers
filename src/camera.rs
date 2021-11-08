@@ -1,6 +1,6 @@
 use cgmath::{
-    Angle, EuclideanSpace, InnerSpace, Matrix4, Point3, Quaternion, Rad, Rotation, Rotation3,
-    Vector2, Vector3,
+    EuclideanSpace, InnerSpace, Matrix4, Point3, Quaternion, Rad, Rotation, Rotation3, Vector2,
+    Vector3,
 };
 
 const DELTA_POSITION: f32 = 0.016;
