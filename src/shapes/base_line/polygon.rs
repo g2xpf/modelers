@@ -16,7 +16,7 @@ pub const VERTICES: &[Vertex; 6] = &[
         a_color: RED,
     },
     Vertex {
-        a_position: [-1.0, 0.0, 0.0],
+        a_position: [0.0, 0.0, 0.0],
         a_color: RED,
     },
     Vertex {
@@ -24,7 +24,7 @@ pub const VERTICES: &[Vertex; 6] = &[
         a_color: BLUE,
     },
     Vertex {
-        a_position: [0.0, -1.0, 0.0],
+        a_position: [0.0, 0.0, 0.0],
         a_color: BLUE,
     },
     Vertex {
@@ -32,7 +32,7 @@ pub const VERTICES: &[Vertex; 6] = &[
         a_color: GREEN,
     },
     Vertex {
-        a_position: [0.0, 0.0, -1.0],
+        a_position: [0.0, 0.0, 0.0],
         a_color: GREEN,
     },
 ];

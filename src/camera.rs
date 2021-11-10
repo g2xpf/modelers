@@ -42,7 +42,7 @@ pub struct Camera {
 
 impl Default for Camera {
     fn default() -> Self {
-        let position = Point3::new(0.0, 0.0, -3.0);
+        let position = Point3::new(0.0, 0.0, 5.0);
         let dir = -position.to_vec();
         let up = Vector3::unit_y();
         let fov = 45f32;

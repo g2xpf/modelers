@@ -29,8 +29,8 @@ fn main() {
         .init();
 
     let (mut ctx, event_loop) = executor::block_on(Context::create_context());
-    let cube = Cube::new(&ctx);
     let base_line = BaseLine::new(&ctx);
+    let cube = Cube::new(&ctx);
 
     let mut fps_counter = FPSCounter::new();
 

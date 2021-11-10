@@ -1,18 +1,17 @@
 use crate::Context;
-use std::borrow::Cow;
 use std::mem;
+use std::{borrow::Cow, mem::size_of_val};
 
-use wgpu::{util::DeviceExt, DynamicOffset};
+use wgpu::util::DeviceExt;
 
 mod polygon;
 use polygon::{Vertex, INDICES, VERTICES};
 use wgpu::{
     BindGroup, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType,
-    Buffer, BufferBindingType, BufferSize, BufferUsages, Extent3d, Features,
-    PipelineLayoutDescriptor, PresentMode, RenderBundle, RenderBundleDescriptor,
-    RenderBundleEncoderDescriptor, RenderPipeline, ShaderSource, ShaderStages,
-    SurfaceConfiguration, Texture, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureUsages, TextureViewDescriptor,
+    Buffer, BufferUsages, Extent3d, Face, Features, PipelineLayoutDescriptor, RenderBundle,
+    RenderBundleDescriptor, RenderBundleEncoderDescriptor, RenderPipeline, ShaderSource,
+    ShaderStages, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+    TextureViewDescriptor,
 };
 
 fn create_texels(size: usize) -> Vec<u8> {
@@ -45,16 +44,6 @@ pub struct Cube {
 
 impl Cube {
     pub fn new(ctx: &Context) -> Self {
-        let config = SurfaceConfiguration {
-            usage: TextureUsages::RENDER_ATTACHMENT,
-            format: ctx.surface.get_preferred_format(&ctx.adapter).unwrap(),
-            width: ctx.size.width,
-            height: ctx.size.height,
-            present_mode: PresentMode::Mailbox,
-        };
-
-        ctx.surface.configure(&ctx.device, &config);
-
         let vertex_size = mem::size_of::<Vertex>();
         let vertex_buffer = ctx
             .device
@@ -70,29 +59,6 @@ impl Cube {
                 label: Some("Index Buffer"),
                 contents: bytemuck::cast_slice(INDICES),
                 usage: BufferUsages::INDEX,
-            });
-
-        let bind_group_layout = ctx
-            .device
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: None,
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Uint,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                }],
-            });
-        let pipeline_layout = ctx
-            .device
-            .create_pipeline_layout(&PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[],
             });
 
         // create texture
@@ -124,20 +90,37 @@ impl Cube {
             texture_extent,
         );
 
+        let bind_group_layout = ctx
+            .device
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Uint,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                }],
+            });
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: ctx.global_ubo.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::TextureView(&texture_view),
-                },
-            ],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::TextureView(&texture_view),
+            }],
             label: None,
         });
+
+        let pipeline_layout = ctx
+            .device
+            .create_pipeline_layout(&PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[&ctx.global_bind_group_layout, &bind_group_layout],
+                push_constant_ranges: &[],
+            });
 
         let shader = ctx
             .device
@@ -151,13 +134,13 @@ impl Cube {
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
                 wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x4,
+                    format: wgpu::VertexFormat::Float32x3,
                     offset: 0,
                     shader_location: 0,
                 },
                 wgpu::VertexAttribute {
                     format: wgpu::VertexFormat::Float32x2,
-                    offset: 4 * 4,
+                    offset: size_of_val(&VERTICES[0].a_pos) as u64,
                     shader_location: 1,
                 },
             ],
@@ -176,13 +159,19 @@ impl Cube {
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
                     entry_point: "fs_main",
-                    targets: &[config.format.into()],
+                    targets: &[ctx.surface_config.format.into()],
                 }),
                 primitive: wgpu::PrimitiveState {
                     cull_mode: Some(wgpu::Face::Back),
                     ..Default::default()
                 },
-                depth_stencil: None,
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: TextureFormat::Depth32Float,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::LessEqual,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
                 multisample: wgpu::MultisampleState::default(),
             });
 
@@ -204,7 +193,7 @@ impl Cube {
                             module: &shader,
                             entry_point: "fs_wire",
                             targets: &[wgpu::ColorTargetState {
-                                format: config.format,
+                                format: ctx.surface_config.format,
                                 blend: Some(wgpu::BlendState {
                                     color: wgpu::BlendComponent {
                                         operation: wgpu::BlendOperation::Add,
@@ -218,11 +207,17 @@ impl Cube {
                         }),
                         primitive: wgpu::PrimitiveState {
                             front_face: wgpu::FrontFace::Ccw,
-                            cull_mode: Some(wgpu::Face::Back),
+                            cull_mode: Some(Face::Back),
                             polygon_mode: wgpu::PolygonMode::Line,
                             ..Default::default()
                         },
-                        depth_stencil: None,
+                        depth_stencil: Some(wgpu::DepthStencilState {
+                            format: TextureFormat::Depth32Float,
+                            depth_write_enabled: false,
+                            depth_compare: wgpu::CompareFunction::Always,
+                            stencil: wgpu::StencilState::default(),
+                            bias: wgpu::DepthBiasState::default(),
+                        }),
                         multisample: wgpu::MultisampleState::default(),
                     })
             });
@@ -265,12 +260,16 @@ impl Cube {
                 .create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
                     label: None,
                     color_formats: &[ctx.surface_config.format],
-                    depth_stencil: None,
+                    depth_stencil: Some(wgpu::RenderBundleDepthStencil {
+                        format: TextureFormat::Depth32Float,
+                        depth_read_only: false,
+                        stencil_read_only: true,
+                    }),
                     sample_count: 1,
                 });
 
         render_bundle_encoder.set_pipeline(pipeline_cube);
-        render_bundle_encoder.set_bind_group(0, &ctx.global_bind_group, &[64]);
+        render_bundle_encoder.set_bind_group(0, &ctx.global_bind_group, &[]);
         render_bundle_encoder.set_bind_group(1, bind_group, &[]);
         render_bundle_encoder.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_bundle_encoder.set_vertex_buffer(0, vertex_buffer.slice(..));

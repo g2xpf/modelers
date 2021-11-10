@@ -10,22 +10,22 @@ struct Locals {
 [[group(0), binding(0)]]
 var<uniform> r_locals: Locals;
 
-[[stage(vertex)]]
-fn vs_main(
-    [[location(0)]] a_position: vec4<f32>,
-    [[location(1)]] a_uv: vec2<f32>,
-) -> VertexOutput {
+fn create_vertex_out(position: vec3<f32>, uv: vec2<f32>) -> VertexOutput {
     var out: VertexOutput;
-    out.uv = a_uv;
-    out.position = r_locals.transform * a_position;
+    out.uv = uv;
+    out.position = r_locals.transform * vec4<f32>(position, 1.0);
     return out;
 }
 
-[[group(0), binding(1)]]
-var texture_depth texture_2d;
-[[group(0), binding(2)]]
-var sampler_depth sampler_comparison;
-[[group(1), binding(1)]]
+[[stage(vertex)]]
+fn vs_main(
+    [[location(0)]] a_position: vec3<f32>,
+    [[location(1)]] a_uv: vec2<f32>,
+) -> VertexOutput {
+    return create_vertex_out(a_position, a_uv);
+}
+
+[[group(1), binding(0)]]
 var r_color: texture_2d<u32>;
 
 [[stage(fragment)]]
@@ -38,10 +38,5 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
 [[stage(fragment)]]
 fn fs_wire() -> [[location(0)]] vec4<f32> {
     return vec4<f32>(0.0, 0.5, 0.0, 0.5);
-}
-
-[[stage(fragment)]]
-fn depth_test() -> f32 {
-    return textureSampleCompareLevel();
 }
 

@@ -1,7 +1,4 @@
-use wgpu::{
-    util::DeviceExt, BindGroupEntry, BindGroupLayoutDescriptor, BufferSize, BufferUsages,
-    PipelineLayoutDescriptor, VertexAttribute,
-};
+use wgpu::{util::DeviceExt, BufferUsages, PipelineLayoutDescriptor, VertexAttribute};
 
 use crate::Context;
 
@@ -13,7 +10,6 @@ use std::borrow::Cow;
 pub struct BaseLine {
     pub index_buffer: wgpu::Buffer,
     pub vertex_buffer: wgpu::Buffer,
-    pub bind_group: wgpu::BindGroup,
     pub render_bundle: wgpu::RenderBundle,
     pub render_pipeline: wgpu::RenderPipeline,
 }
@@ -35,31 +31,6 @@ impl BaseLine {
                 contents: bytemuck::cast_slice(VERTICES),
                 usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
             });
-
-        let bind_group_layout = ctx
-            .device
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: None,
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: BufferSize::new(64),
-                    },
-                    count: None,
-                }],
-            });
-
-        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &bind_group_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: ctx.global_ubo.as_entire_binding(),
-            }],
-        });
 
         let vertex_buffer_layout = wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
@@ -91,7 +62,7 @@ impl BaseLine {
             .device
             .create_pipeline_layout(&PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&bind_group_layout],
+                bind_group_layouts: &[&ctx.global_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -111,7 +82,13 @@ impl BaseLine {
                     polygon_mode: wgpu::PolygonMode::Line,
                     ..wgpu::PrimitiveState::default()
                 },
-                depth_stencil: None,
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth32Float,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::LessEqual,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
                     module: &shader_module,
@@ -127,11 +104,15 @@ impl BaseLine {
                 .create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
                     label: None,
                     color_formats: &[ctx.surface_config.format],
-                    depth_stencil: None,
+                    depth_stencil: Some(wgpu::RenderBundleDepthStencil {
+                        format: wgpu::TextureFormat::Depth32Float,
+                        depth_read_only: false,
+                        stencil_read_only: true,
+                    }),
                     sample_count: 1,
                 });
         render_bundle_encoder.set_pipeline(&render_pipeline);
-        render_bundle_encoder.set_bind_group(0, &bind_group, &[]);
+        render_bundle_encoder.set_bind_group(0, &ctx.global_bind_group, &[]);
         render_bundle_encoder.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_bundle_encoder.set_vertex_buffer(0, vertex_buffer.slice(..));
         render_bundle_encoder.draw_indexed(0..index_count, 0, 0..1);
@@ -142,7 +123,6 @@ impl BaseLine {
         Self {
             index_buffer,
             vertex_buffer,
-            bind_group,
             render_pipeline,
             render_bundle,
         }

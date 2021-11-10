@@ -5,9 +5,9 @@ use winit::window::Window;
 
 use wgpu::util::{self, DeviceExt};
 use wgpu::{
-    Adapter, Backends, BindGroup, BindGroupLayoutEntry, BufferUsages, Device, DeviceDescriptor,
-    Features, Instance, Limits, PresentMode, Queue, Sampler, ShaderStages, Surface,
-    SurfaceConfiguration, TextureUsages, TextureView, TextureViewDescriptor,
+    Adapter, Backends, BindGroup, BindGroupLayout, BindGroupLayoutEntry, BufferUsages, Device,
+    DeviceDescriptor, Features, Instance, Limits, PresentMode, Queue, Sampler, ShaderStages,
+    Surface, SurfaceConfiguration, TextureUsages, TextureView, TextureViewDescriptor,
 };
 
 use crate::Camera;
@@ -30,6 +30,8 @@ pub struct Context {
     pub sampler: Sampler,
     pub depth_texture_view: TextureView,
     pub global_bind_group: BindGroup,
+    pub global_bind_group_layout: BindGroupLayout,
+    pub global_binding_offset: wgpu::DynamicOffset,
 }
 
 impl Context {
@@ -109,58 +111,32 @@ impl Context {
             ..wgpu::SamplerDescriptor::default()
         });
 
+        let binding_size = std::mem::size_of::<[f32; 16]>() as u64;
+        let min_uniform_offset = device.limits().min_uniform_buffer_offset_alignment as u64;
+        assert!(binding_size <= min_uniform_offset);
+        let global_binding_offset = min_uniform_offset as wgpu::DynamicOffset;
+
         let global_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: None,
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: wgpu::BufferSize::new(64),
-                        },
-                        count: None,
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(binding_size),
                     },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler {
-                            filtering: true,
-                            comparison: true,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Depth,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                ],
+                    count: None,
+                }],
             });
 
         let global_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: global_ubo.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&depth_texture_view),
-                },
-            ],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: global_ubo.as_entire_binding(),
+            }],
             layout: &global_bind_group_layout,
         });
 
@@ -179,6 +155,8 @@ impl Context {
                 sampler,
                 depth_texture_view,
                 global_bind_group,
+                global_bind_group_layout,
+                global_binding_offset,
             },
             event_loop,
         )
