@@ -3,8 +3,8 @@ use cgmath::{
     Vector3,
 };
 
-const DELTA_POSITION: f32 = 0.016;
-const DELTA_ANGLE: f32 = std::f32::consts::PI / 300.0;
+const DELTA_POSITION: f32 = 0.05;
+const DELTA_ANGLE: f32 = std::f32::consts::PI / 100.0;
 const ELEVATION_MARGIN_RATIO: f32 = 0.001;
 const MAX_ELEVATION_ANGLE: Rad<f32> =
     Rad(std::f32::consts::FRAC_PI_2 * (1.0 - ELEVATION_MARGIN_RATIO));

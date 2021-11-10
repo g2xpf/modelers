@@ -8,7 +8,8 @@ use wgpu::util::DeviceExt;
 use wgpu::{
     BindGroup, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType,
     Buffer, BufferBindingType, BufferSize, BufferUsages, Extent3d, Features,
-    PipelineLayoutDescriptor, PresentMode, RenderPipeline, ShaderSource, ShaderStages,
+    PipelineLayoutDescriptor, PresentMode, RenderBundle, RenderBundleDescriptor,
+    RenderBundleEncoderDescriptor, RenderPipeline, ShaderSource, ShaderStages,
     SurfaceConfiguration, Texture, TextureDescriptor, TextureDimension, TextureFormat,
     TextureUsages, TextureViewDescriptor,
 };
@@ -39,6 +40,7 @@ pub struct RenderConfig {
     pub pipeline_cube: RenderPipeline,
     pub pipeline_wire: Option<RenderPipeline>,
     pub num_indicies: usize,
+    pub render_bundle: RenderBundle,
 }
 
 impl RenderConfig {
@@ -249,6 +251,16 @@ impl RenderConfig {
 
         let num_indicies = INDICES.len();
 
+        let render_bundle = Self::create_render_bundle(
+            ctx,
+            &pipeline_cube,
+            pipeline_wire.as_ref(),
+            &bind_group,
+            &index_buffer,
+            &vertex_buffer,
+            num_indicies,
+        );
+
         RenderConfig {
             texture,
             index_buffer,
@@ -257,7 +269,40 @@ impl RenderConfig {
             pipeline_cube,
             pipeline_wire,
             bind_group,
+            render_bundle,
             num_indicies,
         }
+    }
+
+    pub fn create_render_bundle(
+        ctx: &Context,
+        pipeline_cube: &RenderPipeline,
+        pipeline_wire: Option<&RenderPipeline>,
+        bind_group: &BindGroup,
+        index_buffer: &Buffer,
+        vertex_buffer: &Buffer,
+        num_indicies: usize,
+    ) -> RenderBundle {
+        let mut render_bundle_encoder =
+            ctx.device
+                .create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
+                    label: None,
+                    color_formats: &[ctx.surface_config.format],
+                    depth_stencil: None,
+                    sample_count: 1,
+                });
+
+        render_bundle_encoder.set_pipeline(pipeline_cube);
+        render_bundle_encoder.set_bind_group(0, bind_group, &[]);
+        render_bundle_encoder.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_bundle_encoder.set_vertex_buffer(0, vertex_buffer.slice(..));
+        render_bundle_encoder.draw_indexed(0..(num_indicies as u32), 0, 0..1);
+
+        if let Some(pipe) = pipeline_wire {
+            render_bundle_encoder.set_pipeline(pipe);
+            render_bundle_encoder.draw_indexed(0..(num_indicies as u32), 0, 0..1);
+        }
+
+        render_bundle_encoder.finish(&RenderBundleDescriptor { label: None })
     }
 }

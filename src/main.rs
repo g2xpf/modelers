@@ -3,16 +3,34 @@ use winit::event_loop::ControlFlow;
 
 use futures::executor;
 
-use modelers::{Camera, Context, LoopClock, RenderConfig};
+use modelers::{Camera, Context, RenderConfig};
+
+use fps_counter::FPSCounter;
+
+use std::io::Write;
 
 fn main() {
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .format(|buf, record| {
+            let style = buf.default_level_style(record.level());
+            let level = style.value(record.level());
+            let args = record.args();
+            let time = buf.timestamp_nanos();
+            writeln!(
+                buf,
+                "[{time} {level}] {args}",
+                time = time,
+                level = level,
+                args = args
+            )
+        })
+        .init();
 
     let (mut ctx, event_loop) = executor::block_on(Context::create_context());
     let mut camera = Camera::default();
     let config = RenderConfig::new(&ctx, &camera);
 
-    let mut loop_clock = LoopClock::start_clock(60.0);
+    let mut fps_counter = FPSCounter::new();
 
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent { event, .. } => match event {
@@ -37,6 +55,7 @@ fn main() {
                     },
                 ..
             } => {
+                log::info!("KeyboardInput");
                 let should_do = match state {
                     ElementState::Pressed => true,
                     ElementState::Released => false,
@@ -70,18 +89,10 @@ fn main() {
         },
         Event::MainEventsCleared => {
             camera.update();
-        }
-        Event::RedrawEventsCleared => {
-            if let Some(wait_instant) = loop_clock.get_wait_duration() {
-                *control_flow = ControlFlow::WaitUntil(wait_instant);
-            } else {
-                ctx.window.request_redraw();
-            }
+            ctx.window.request_redraw();
         }
         Event::RedrawRequested(_) => {
-            if let Some(average_frametime) = loop_clock.tick() {
-                log::info!("average: {}ms", average_frametime);
-            }
+            log::info!("RedrawRequested: {}[fps]", fps_counter.tick());
 
             let vp_matrix = camera.create_vp_matrix(ctx.get_aspect_ratio());
             let vp_matrix: &[f32; 16] = vp_matrix.as_ref();
@@ -122,18 +133,7 @@ fn main() {
                     }],
                     depth_stencil_attachment: None,
                 });
-                rpass.push_debug_group("Prepare data for draw.");
-                rpass.set_pipeline(&config.pipeline_cube);
-                rpass.set_bind_group(0, &config.bind_group, &[]);
-                rpass.set_index_buffer(config.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                rpass.set_vertex_buffer(0, config.vertex_buffer.slice(..));
-                rpass.pop_debug_group();
-                rpass.insert_debug_marker("Draw!");
-                rpass.draw_indexed(0..(config.num_indicies as u32), 0, 0..1);
-                if let Some(pipe) = &config.pipeline_wire {
-                    rpass.set_pipeline(pipe);
-                    rpass.draw_indexed(0..(config.num_indicies as u32), 0, 0..1);
-                }
+                rpass.execute_bundles(std::iter::once(&config.render_bundle));
             }
 
             ctx.queue.submit(Some(encoder.finish()));
