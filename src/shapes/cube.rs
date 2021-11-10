@@ -1,10 +1,13 @@
 use crate::Camera;
 
-pub use super::{Context, Vertex, INDICES, VERTICES};
+use crate::Context;
 use std::borrow::Cow;
 use std::mem;
 
 use wgpu::util::DeviceExt;
+
+mod polygon;
+use polygon::{Vertex, INDICES, VERTICES};
 use wgpu::{
     BindGroup, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType,
     Buffer, BufferBindingType, BufferSize, BufferUsages, Extent3d, Features,
@@ -31,7 +34,7 @@ fn create_texels(size: usize) -> Vec<u8> {
         .collect()
 }
 
-pub struct RenderConfig {
+pub struct Cube {
     pub texture: Texture,
     pub index_buffer: Buffer,
     pub vertex_buffer: Buffer,
@@ -43,7 +46,7 @@ pub struct RenderConfig {
     pub render_bundle: RenderBundle,
 }
 
-impl RenderConfig {
+impl Cube {
     pub fn new(ctx: &Context, camera: &Camera) -> Self {
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
@@ -165,7 +168,7 @@ impl RenderConfig {
             .device
             .create_shader_module(&wgpu::ShaderModuleDescriptor {
                 label: None,
-                source: ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+                source: ShaderSource::Wgsl(Cow::Borrowed(include_str!("cube/cube.wgsl"))),
             });
 
         let vertex_buffers = [wgpu::VertexBufferLayout {
@@ -261,7 +264,7 @@ impl RenderConfig {
             num_indicies,
         );
 
-        RenderConfig {
+        Cube {
             texture,
             index_buffer,
             uniform_buffer,

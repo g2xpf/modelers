@@ -1,9 +1,10 @@
+use modelers::shapes::BaseLine;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::ControlFlow;
 
 use futures::executor;
 
-use modelers::{Camera, Context, RenderConfig};
+use modelers::{shapes::Cube, Camera, Context};
 
 use fps_counter::FPSCounter;
 
@@ -28,7 +29,8 @@ fn main() {
 
     let (mut ctx, event_loop) = executor::block_on(Context::create_context());
     let mut camera = Camera::default();
-    let config = RenderConfig::new(&ctx, &camera);
+    let cube = Cube::new(&ctx, &camera);
+    let base_line = BaseLine::new(&ctx, &camera);
 
     let mut fps_counter = FPSCounter::new();
 
@@ -97,7 +99,12 @@ fn main() {
             let vp_matrix = camera.create_vp_matrix(ctx.get_aspect_ratio());
             let vp_matrix: &[f32; 16] = vp_matrix.as_ref();
             ctx.queue
-                .write_buffer(&config.uniform_buffer, 0, bytemuck::cast_slice(vp_matrix));
+                .write_buffer(&cube.uniform_buffer, 0, bytemuck::cast_slice(vp_matrix));
+            ctx.queue.write_buffer(
+                &base_line.uniform_buffer,
+                0,
+                bytemuck::cast_slice(vp_matrix),
+            );
 
             let frame = match ctx.surface.get_current_texture() {
                 Ok(frame) => frame,
@@ -108,6 +115,7 @@ fn main() {
                         .expect("Failed to acquire next surface texture!")
                 }
             };
+
             let view = frame
                 .texture
                 .create_view(&wgpu::TextureViewDescriptor::default());
@@ -133,7 +141,7 @@ fn main() {
                     }],
                     depth_stencil_attachment: None,
                 });
-                rpass.execute_bundles(std::iter::once(&config.render_bundle));
+                rpass.execute_bundles([&cube.render_bundle, &base_line.render_bundle].into_iter());
             }
 
             ctx.queue.submit(Some(encoder.finish()));
