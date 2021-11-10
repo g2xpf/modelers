@@ -1,4 +1,5 @@
 use modelers::shapes::BaseLine;
+use wgpu::Operations;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::ControlFlow;
 
@@ -133,7 +134,14 @@ fn main() {
                             store: true,
                         },
                     }],
-                    depth_stencil_attachment: None,
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &ctx.depth_texture_view,
+                        depth_ops: Some(Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: true,
+                        }),
+                        stencil_ops: None,
+                    }),
                 });
                 rpass.execute_bundles([&cube.render_bundle, &base_line.render_bundle].into_iter());
             }

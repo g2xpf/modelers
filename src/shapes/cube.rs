@@ -2,7 +2,7 @@ use crate::Context;
 use std::borrow::Cow;
 use std::mem;
 
-use wgpu::util::DeviceExt;
+use wgpu::{util::DeviceExt, DynamicOffset};
 
 mod polygon;
 use polygon::{Vertex, INDICES, VERTICES};
@@ -76,28 +76,16 @@ impl Cube {
             .device
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: None,
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::VERTEX,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(64),
-                        },
-                        count: None,
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Uint,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
                     },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Uint,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                ],
+                    count: None,
+                }],
             });
         let pipeline_layout = ctx
             .device
@@ -282,7 +270,8 @@ impl Cube {
                 });
 
         render_bundle_encoder.set_pipeline(pipeline_cube);
-        render_bundle_encoder.set_bind_group(0, bind_group, &[]);
+        render_bundle_encoder.set_bind_group(0, &ctx.global_bind_group, &[64]);
+        render_bundle_encoder.set_bind_group(1, bind_group, &[]);
         render_bundle_encoder.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_bundle_encoder.set_vertex_buffer(0, vertex_buffer.slice(..));
         render_bundle_encoder.draw_indexed(0..(num_indicies as u32), 0, 0..1);

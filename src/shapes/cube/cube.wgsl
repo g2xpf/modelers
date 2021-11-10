@@ -22,6 +22,10 @@ fn vs_main(
 }
 
 [[group(0), binding(1)]]
+var texture_depth texture_2d;
+[[group(0), binding(2)]]
+var sampler_depth sampler_comparison;
+[[group(1), binding(1)]]
 var r_color: texture_2d<u32>;
 
 [[stage(fragment)]]
@@ -35,3 +39,9 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
 fn fs_wire() -> [[location(0)]] vec4<f32> {
     return vec4<f32>(0.0, 0.5, 0.0, 0.5);
 }
+
+[[stage(fragment)]]
+fn depth_test() -> f32 {
+    return textureSampleCompareLevel();
+}
+

@@ -5,8 +5,9 @@ use winit::window::Window;
 
 use wgpu::util::{self, DeviceExt};
 use wgpu::{
-    Adapter, Backends, BindGroup, BufferUsages, Device, DeviceDescriptor, Features, Instance,
-    Limits, PresentMode, Queue, Surface, SurfaceConfiguration, TextureUsages,
+    Adapter, Backends, BindGroup, BindGroupLayoutEntry, BufferUsages, Device, DeviceDescriptor,
+    Features, Instance, Limits, PresentMode, Queue, Sampler, ShaderStages, Surface,
+    SurfaceConfiguration, TextureUsages, TextureView, TextureViewDescriptor,
 };
 
 use crate::Camera;
@@ -21,8 +22,14 @@ pub struct Context {
     pub size: PhysicalSize<u32>,
     pub surface: Surface,
 
+    // global uniforms
     pub camera: Camera,
     pub global_ubo: wgpu::Buffer,
+
+    // for depth test
+    pub sampler: Sampler,
+    pub depth_texture_view: TextureView,
+    pub global_bind_group: BindGroup,
 }
 
 impl Context {
@@ -88,6 +95,75 @@ impl Context {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
+        let depth_texture_view = Self::create_depth_texture_view(&device, &surface_config);
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: None,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            compare: Some(wgpu::CompareFunction::LessEqual),
+            ..wgpu::SamplerDescriptor::default()
+        });
+
+        let global_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: wgpu::BufferSize::new(64),
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler {
+                            filtering: true,
+                            comparison: true,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Depth,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+
+        let global_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: global_ubo.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&depth_texture_view),
+                },
+            ],
+            layout: &global_bind_group_layout,
+        });
+
         (
             Context {
                 global_ubo,
@@ -100,13 +176,40 @@ impl Context {
                 adapter,
                 size,
                 surface,
+                sampler,
+                depth_texture_view,
+                global_bind_group,
             },
             event_loop,
         )
     }
 
-    pub fn recreate_surface(&self) {
+    pub fn create_depth_texture_view(
+        device: &Device,
+        surface_config: &SurfaceConfiguration,
+    ) -> TextureView {
+        let depth_texture_size = wgpu::Extent3d {
+            width: surface_config.width,
+            height: surface_config.height,
+            depth_or_array_layers: 1,
+        };
+        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: depth_texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        });
+
+        depth_texture.create_view(&TextureViewDescriptor::default())
+    }
+
+    pub fn recreate_surface(&mut self) {
         self.surface.configure(&self.device, &self.surface_config);
+        self.depth_texture_view =
+            Self::create_depth_texture_view(&self.device, &self.surface_config);
     }
 
     pub fn get_aspect_ratio(&self) -> f32 {
