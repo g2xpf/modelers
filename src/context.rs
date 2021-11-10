@@ -3,11 +3,13 @@ use winit::dpi::PhysicalSize;
 use winit::event_loop::EventLoop;
 use winit::window::Window;
 
-use wgpu::util;
+use wgpu::util::{self, DeviceExt};
 use wgpu::{
-    Adapter, Backends, Device, DeviceDescriptor, Features, Instance, Limits, PresentMode, Queue,
-    Surface, SurfaceConfiguration, TextureUsages,
+    Adapter, Backends, BindGroup, BufferUsages, Device, DeviceDescriptor, Features, Instance,
+    Limits, PresentMode, Queue, Surface, SurfaceConfiguration, TextureUsages,
 };
+
+use crate::Camera;
 
 pub struct Context {
     pub window: Window,
@@ -18,6 +20,9 @@ pub struct Context {
     pub queue: Queue,
     pub size: PhysicalSize<u32>,
     pub surface: Surface,
+
+    pub camera: Camera,
+    pub global_ubo: wgpu::Buffer,
 }
 
 impl Context {
@@ -74,8 +79,19 @@ impl Context {
 
         surface.configure(&device, &surface_config);
 
+        let camera = Camera::default();
+        let vp_matrix = camera.create_vp_matrix(size.width as f32 / size.height as f32);
+        let vp_matrix: &[f32; 16] = vp_matrix.as_ref();
+        let global_ubo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(vp_matrix),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
         (
             Context {
+                global_ubo,
+                camera,
                 surface_config,
                 window,
                 device,

@@ -1,5 +1,3 @@
-use crate::Camera;
-
 use crate::Context;
 use std::borrow::Cow;
 use std::mem;
@@ -38,7 +36,6 @@ pub struct Cube {
     pub texture: Texture,
     pub index_buffer: Buffer,
     pub vertex_buffer: Buffer,
-    pub uniform_buffer: Buffer,
     pub bind_group: BindGroup,
     pub pipeline_cube: RenderPipeline,
     pub pipeline_wire: Option<RenderPipeline>,
@@ -47,7 +44,7 @@ pub struct Cube {
 }
 
 impl Cube {
-    pub fn new(ctx: &Context, camera: &Camera) -> Self {
+    pub fn new(ctx: &Context) -> Self {
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
             format: ctx.surface.get_preferred_format(&ctx.adapter).unwrap(),
@@ -139,22 +136,12 @@ impl Cube {
             texture_extent,
         );
 
-        let vp_matrix = camera.create_vp_matrix(ctx.get_aspect_ratio());
-        let vp_matrix: &[f32; 16] = vp_matrix.as_ref();
-        let uniform_buffer = ctx
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Uniform Buffer"),
-                contents: bytemuck::cast_slice(vp_matrix),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
-
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
+                    resource: ctx.global_ubo.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -267,7 +254,6 @@ impl Cube {
         Cube {
             texture,
             index_buffer,
-            uniform_buffer,
             vertex_buffer,
             pipeline_cube,
             pipeline_wire,

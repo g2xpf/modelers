@@ -1,9 +1,9 @@
 use wgpu::{
-    util::DeviceExt, BindGroupEntry, BindGroupLayoutDescriptor, BlendState, BufferSize,
-    BufferUsages, ColorTargetState, ColorWrites, PipelineLayoutDescriptor, VertexAttribute,
+    util::DeviceExt, BindGroupEntry, BindGroupLayoutDescriptor, BufferSize, BufferUsages,
+    PipelineLayoutDescriptor, VertexAttribute,
 };
 
-use crate::{Camera, Context};
+use crate::Context;
 
 mod polygon;
 use polygon::{Vertex, INDICES, VERTICES};
@@ -13,14 +13,13 @@ use std::borrow::Cow;
 pub struct BaseLine {
     pub index_buffer: wgpu::Buffer,
     pub vertex_buffer: wgpu::Buffer,
-    pub uniform_buffer: wgpu::Buffer,
     pub bind_group: wgpu::BindGroup,
     pub render_bundle: wgpu::RenderBundle,
     pub render_pipeline: wgpu::RenderPipeline,
 }
 
 impl BaseLine {
-    pub fn new(ctx: &Context, camera: &Camera) -> Self {
+    pub fn new(ctx: &Context) -> Self {
         let index_buffer = ctx
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -35,18 +34,6 @@ impl BaseLine {
                 label: None,
                 contents: bytemuck::cast_slice(VERTICES),
                 usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-            });
-
-        let aspect_ratio = ctx.get_aspect_ratio();
-        let vp_matrix = camera.create_vp_matrix(aspect_ratio);
-        let vp_matrix: &[f32; 16] = vp_matrix.as_ref();
-
-        let uniform_buffer = ctx
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: None,
-                contents: bytemuck::cast_slice(vp_matrix),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 
         let bind_group_layout = ctx
@@ -70,7 +57,7 @@ impl BaseLine {
             layout: &bind_group_layout,
             entries: &[BindGroupEntry {
                 binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
+                resource: ctx.global_ubo.as_entire_binding(),
             }],
         });
 
@@ -155,7 +142,6 @@ impl BaseLine {
         Self {
             index_buffer,
             vertex_buffer,
-            uniform_buffer,
             bind_group,
             render_pipeline,
             render_bundle,

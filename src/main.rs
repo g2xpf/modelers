@@ -4,7 +4,7 @@ use winit::event_loop::ControlFlow;
 
 use futures::executor;
 
-use modelers::{shapes::Cube, Camera, Context};
+use modelers::{shapes::Cube, Context};
 
 use fps_counter::FPSCounter;
 
@@ -28,9 +28,8 @@ fn main() {
         .init();
 
     let (mut ctx, event_loop) = executor::block_on(Context::create_context());
-    let mut camera = Camera::default();
-    let cube = Cube::new(&ctx, &camera);
-    let base_line = BaseLine::new(&ctx, &camera);
+    let cube = Cube::new(&ctx);
+    let base_line = BaseLine::new(&ctx);
 
     let mut fps_counter = FPSCounter::new();
 
@@ -63,16 +62,16 @@ fn main() {
                     ElementState::Released => false,
                 };
                 match keycode {
-                    VirtualKeyCode::W => camera.move_forward(should_do),
-                    VirtualKeyCode::A => camera.move_left(should_do),
-                    VirtualKeyCode::S => camera.move_backward(should_do),
-                    VirtualKeyCode::D => camera.move_right(should_do),
-                    VirtualKeyCode::LShift => camera.move_down(should_do),
-                    VirtualKeyCode::Space => camera.move_up(should_do),
-                    VirtualKeyCode::H => camera.turn_left(should_do),
-                    VirtualKeyCode::L => camera.turn_right(should_do),
-                    VirtualKeyCode::J => camera.look_down(should_do),
-                    VirtualKeyCode::K => camera.look_up(should_do),
+                    VirtualKeyCode::W => ctx.camera.move_forward(should_do),
+                    VirtualKeyCode::A => ctx.camera.move_left(should_do),
+                    VirtualKeyCode::S => ctx.camera.move_backward(should_do),
+                    VirtualKeyCode::D => ctx.camera.move_right(should_do),
+                    VirtualKeyCode::LShift => ctx.camera.move_down(should_do),
+                    VirtualKeyCode::Space => ctx.camera.move_up(should_do),
+                    VirtualKeyCode::H => ctx.camera.turn_left(should_do),
+                    VirtualKeyCode::L => ctx.camera.turn_right(should_do),
+                    VirtualKeyCode::J => ctx.camera.look_down(should_do),
+                    VirtualKeyCode::K => ctx.camera.look_up(should_do),
                     _ => {}
                 }
             }
@@ -90,21 +89,16 @@ fn main() {
             _ => {}
         },
         Event::MainEventsCleared => {
-            camera.update();
+            ctx.camera.update();
             ctx.window.request_redraw();
         }
         Event::RedrawRequested(_) => {
             log::info!("RedrawRequested: {}[fps]", fps_counter.tick());
 
-            let vp_matrix = camera.create_vp_matrix(ctx.get_aspect_ratio());
+            let vp_matrix = ctx.camera.create_vp_matrix(ctx.get_aspect_ratio());
             let vp_matrix: &[f32; 16] = vp_matrix.as_ref();
             ctx.queue
-                .write_buffer(&cube.uniform_buffer, 0, bytemuck::cast_slice(vp_matrix));
-            ctx.queue.write_buffer(
-                &base_line.uniform_buffer,
-                0,
-                bytemuck::cast_slice(vp_matrix),
-            );
+                .write_buffer(&ctx.global_ubo, 0, bytemuck::cast_slice(vp_matrix));
 
             let frame = match ctx.surface.get_current_texture() {
                 Ok(frame) => frame,
