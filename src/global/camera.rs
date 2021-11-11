@@ -1,3 +1,4 @@
+use bytemuck::{Pod, Zeroable};
 use cgmath::{
     EuclideanSpace, InnerSpace, Matrix4, Point3, Quaternion, Rad, Rotation, Rotation3, Vector2,
     Vector3,
@@ -70,12 +71,25 @@ impl Default for Camera {
     }
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+pub struct RawCamera {
+    pub vp_matrix: [f32; 16],
+    pub camera_pos: [f32; 3],
+}
+
 impl Camera {
-    pub fn create_vp_matrix(&self, aspect_ratio: f32) -> Matrix4<f32> {
+    pub fn create_raw_camera(&self, aspect_ratio: f32) -> RawCamera {
         let projection_matrix =
             cgmath::perspective(cgmath::Deg(self.fov), aspect_ratio, self.near, self.far);
         let view_matrix = Matrix4::look_to_rh(self.position, self.dir, self.up);
-        OPENGL_TO_WGPU_MATRIX * projection_matrix * view_matrix
+        let vp_matrix = OPENGL_TO_WGPU_MATRIX * projection_matrix * view_matrix;
+        let vp_matrix = *vp_matrix.as_ref();
+        let camera_pos = self.position.into();
+        RawCamera {
+            vp_matrix,
+            camera_pos,
+        }
     }
 
     pub fn move_right(&mut self, should_move: bool) {

@@ -1,7 +1,11 @@
 use crate::Context;
+use std::f32::consts::PI;
+use std::io::Cursor;
 use std::mem;
 use std::{borrow::Cow, mem::size_of_val};
 
+use bytemuck::{Pod, Zeroable};
+use cgmath::{InnerSpace, Matrix, Matrix4, Rad, SquareMatrix, Vector3};
 use wgpu::util::DeviceExt;
 
 mod polygon;
@@ -31,10 +35,20 @@ fn create_texels(size: usize) -> Vec<u8> {
         .collect()
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+pub struct CubeUniforms {
+    model_matrix: [f32; 16],
+    model_matrix_inverted_transposed: [f32; 16],
+}
+
 pub struct Cube {
+    pub model_matrix: Matrix4<f32>,
+
     pub texture: Texture,
     pub index_buffer: Buffer,
     pub vertex_buffer: Buffer,
+    pub uniform_buffer: Buffer,
     pub bind_group: BindGroup,
     pub pipeline_cube: RenderPipeline,
     pub pipeline_wire: Option<RenderPipeline>,
@@ -63,7 +77,13 @@ impl Cube {
 
         // create texture
         let size = 256u32;
-        let texels = create_texels(size as usize);
+        let raw_image = include_bytes!("cube/wood_256x256.png");
+        let decoder = png::Decoder::new(Cursor::new(raw_image));
+        let (info, mut reader) = decoder.read_info().unwrap();
+        let mut buf = vec![0; info.buffer_size()];
+        reader.next_frame(&mut buf).unwrap();
+
+        // let texels = create_texels(size as usize);
         let texture_extent = Extent3d {
             width: size,
             height: size,
@@ -81,7 +101,7 @@ impl Cube {
         let texture_view = texture.create_view(&TextureViewDescriptor::default());
         ctx.queue.write_texture(
             texture.as_image_copy(),
-            &texels,
+            &buf,
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(std::num::NonZeroU32::new(size).unwrap()),
@@ -90,27 +110,58 @@ impl Cube {
             texture_extent,
         );
 
+        let model_matrix = Matrix4::identity();
+
+        let uniform_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            size: mem::size_of::<[f32; 32]>() as u64,
+            mapped_at_creation: false,
+        });
+
+        Self::update_inner(&ctx.queue, &uniform_buffer, model_matrix);
+
         let bind_group_layout = ctx
             .device
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: None,
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Uint,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Uint,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
                     },
-                    count: None,
-                }],
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::VERTEX,
+                        ty: BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: wgpu::BufferSize::new(
+                                mem::size_of::<[f32; 32]>() as u64
+                            ),
+                        },
+                        count: None,
+                    },
+                ],
             });
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::TextureView(&texture_view),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(&texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: uniform_buffer.as_entire_binding(),
+                },
+            ],
             label: None,
         });
 
@@ -118,7 +169,7 @@ impl Cube {
             .device
             .create_pipeline_layout(&PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&ctx.global_bind_group_layout, &bind_group_layout],
+                bind_group_layouts: &[&ctx.global.bind_group_layout, &bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -142,6 +193,12 @@ impl Cube {
                     format: wgpu::VertexFormat::Float32x2,
                     offset: size_of_val(&VERTICES[0].a_pos) as u64,
                     shader_location: 1,
+                },
+                wgpu::VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x3,
+                    offset: size_of_val(&VERTICES[0].a_pos) as u64
+                        + size_of_val(&VERTICES[0].a_uv) as u64,
+                    shader_location: 2,
                 },
             ],
         }];
@@ -235,6 +292,7 @@ impl Cube {
         );
 
         Cube {
+            model_matrix,
             texture,
             index_buffer,
             vertex_buffer,
@@ -243,7 +301,31 @@ impl Cube {
             bind_group,
             render_bundle,
             num_indicies,
+            uniform_buffer,
         }
+    }
+
+    fn update_inner(queue: &wgpu::Queue, uniform_buffer: &Buffer, model_matrix: Matrix4<f32>) {
+        let raw_model_matrix: &[f32; 16] = model_matrix.as_ref();
+        queue.write_buffer(uniform_buffer, 0, bytemuck::cast_slice(raw_model_matrix));
+        let model_matrix_inverted_transposed = model_matrix
+            .invert()
+            .expect("failed to calculate inverse matrix of Cube rotation")
+            .transpose();
+        let raw_model_matrix_inverted_transposed: &[f32; 16] =
+            model_matrix_inverted_transposed.as_ref();
+        queue.write_buffer(
+            uniform_buffer,
+            mem::size_of::<[f32; 16]>() as u64,
+            bytemuck::cast_slice(raw_model_matrix_inverted_transposed),
+        );
+    }
+
+    pub fn update(&mut self, queue: &wgpu::Queue) {
+        let delta_rotation =
+            Matrix4::from_axis_angle(Vector3::new(1.0, 1.0, 1.0).normalize(), Rad(PI / 180.0));
+        self.model_matrix = delta_rotation * self.model_matrix;
+        Self::update_inner(queue, &self.uniform_buffer, self.model_matrix);
     }
 
     pub fn create_render_bundle(
@@ -269,7 +351,7 @@ impl Cube {
                 });
 
         render_bundle_encoder.set_pipeline(pipeline_cube);
-        render_bundle_encoder.set_bind_group(0, &ctx.global_bind_group, &[]);
+        render_bundle_encoder.set_bind_group(0, &ctx.global.bind_group, &[]);
         render_bundle_encoder.set_bind_group(1, bind_group, &[]);
         render_bundle_encoder.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_bundle_encoder.set_vertex_buffer(0, vertex_buffer.slice(..));

@@ -30,7 +30,7 @@ fn main() {
 
     let (mut ctx, event_loop) = executor::block_on(Context::create_context());
     let base_line = BaseLine::new(&ctx);
-    let cube = Cube::new(&ctx);
+    let mut cube = Cube::new(&ctx);
 
     let mut fps_counter = FPSCounter::new();
 
@@ -63,16 +63,16 @@ fn main() {
                     ElementState::Released => false,
                 };
                 match keycode {
-                    VirtualKeyCode::W => ctx.camera.move_forward(should_do),
-                    VirtualKeyCode::A => ctx.camera.move_left(should_do),
-                    VirtualKeyCode::S => ctx.camera.move_backward(should_do),
-                    VirtualKeyCode::D => ctx.camera.move_right(should_do),
-                    VirtualKeyCode::LShift => ctx.camera.move_down(should_do),
-                    VirtualKeyCode::Space => ctx.camera.move_up(should_do),
-                    VirtualKeyCode::H => ctx.camera.turn_left(should_do),
-                    VirtualKeyCode::L => ctx.camera.turn_right(should_do),
-                    VirtualKeyCode::J => ctx.camera.look_down(should_do),
-                    VirtualKeyCode::K => ctx.camera.look_up(should_do),
+                    VirtualKeyCode::W => ctx.global.camera.move_forward(should_do),
+                    VirtualKeyCode::A => ctx.global.camera.move_left(should_do),
+                    VirtualKeyCode::S => ctx.global.camera.move_backward(should_do),
+                    VirtualKeyCode::D => ctx.global.camera.move_right(should_do),
+                    VirtualKeyCode::LShift => ctx.global.camera.move_down(should_do),
+                    VirtualKeyCode::Space => ctx.global.camera.move_up(should_do),
+                    VirtualKeyCode::H => ctx.global.camera.turn_left(should_do),
+                    VirtualKeyCode::L => ctx.global.camera.turn_right(should_do),
+                    VirtualKeyCode::J => ctx.global.camera.look_down(should_do),
+                    VirtualKeyCode::K => ctx.global.camera.look_up(should_do),
                     _ => {}
                 }
             }
@@ -90,16 +90,14 @@ fn main() {
             _ => {}
         },
         Event::MainEventsCleared => {
-            ctx.camera.update();
+            ctx.global.camera.update();
+            cube.update(&ctx.queue);
             ctx.window.request_redraw();
         }
         Event::RedrawRequested(_) => {
             log::info!("RedrawRequested: {}[fps]", fps_counter.tick());
 
-            let vp_matrix = ctx.camera.create_vp_matrix(ctx.get_aspect_ratio());
-            let vp_matrix: &[f32; 16] = vp_matrix.as_ref();
-            ctx.queue
-                .write_buffer(&ctx.global_ubo, 0, bytemuck::cast_slice(vp_matrix));
+            ctx.global.on_resize(&ctx.queue, ctx.size);
 
             let frame = match ctx.surface.get_current_texture() {
                 Ok(frame) => frame,

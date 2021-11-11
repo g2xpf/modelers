@@ -3,14 +3,13 @@ use winit::dpi::PhysicalSize;
 use winit::event_loop::EventLoop;
 use winit::window::Window;
 
-use wgpu::util::{self, DeviceExt};
+use wgpu::util;
 use wgpu::{
-    Adapter, Backends, BindGroup, BindGroupLayout, BindGroupLayoutEntry, BufferUsages, Device,
-    DeviceDescriptor, Features, Instance, Limits, PresentMode, Queue, Sampler, ShaderStages,
-    Surface, SurfaceConfiguration, TextureUsages, TextureView, TextureViewDescriptor,
+    Adapter, Backends, Device, DeviceDescriptor, Features, Instance, Limits, PresentMode, Queue,
+    Sampler, Surface, SurfaceConfiguration, TextureUsages, TextureView, TextureViewDescriptor,
 };
 
-use crate::Camera;
+use crate::global::Global;
 
 pub struct Context {
     pub window: Window,
@@ -23,15 +22,11 @@ pub struct Context {
     pub surface: Surface,
 
     // global uniforms
-    pub camera: Camera,
-    pub global_ubo: wgpu::Buffer,
+    pub global: Global,
 
     // for depth test
     pub sampler: Sampler,
     pub depth_texture_view: TextureView,
-    pub global_bind_group: BindGroup,
-    pub global_bind_group_layout: BindGroupLayout,
-    pub global_binding_offset: wgpu::DynamicOffset,
 }
 
 impl Context {
@@ -88,15 +83,6 @@ impl Context {
 
         surface.configure(&device, &surface_config);
 
-        let camera = Camera::default();
-        let vp_matrix = camera.create_vp_matrix(size.width as f32 / size.height as f32);
-        let vp_matrix: &[f32; 16] = vp_matrix.as_ref();
-        let global_ubo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::cast_slice(vp_matrix),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-
         let depth_texture_view = Self::create_depth_texture_view(&device, &surface_config);
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -111,39 +97,10 @@ impl Context {
             ..wgpu::SamplerDescriptor::default()
         });
 
-        let binding_size = std::mem::size_of::<[f32; 16]>() as u64;
-        let min_uniform_offset = device.limits().min_uniform_buffer_offset_alignment as u64;
-        assert!(binding_size <= min_uniform_offset);
-        let global_binding_offset = min_uniform_offset as wgpu::DynamicOffset;
-
-        let global_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: None,
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: wgpu::BufferSize::new(binding_size),
-                    },
-                    count: None,
-                }],
-            });
-
-        let global_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: global_ubo.as_entire_binding(),
-            }],
-            layout: &global_bind_group_layout,
-        });
+        let global = Global::new(&device, size);
 
         (
             Context {
-                global_ubo,
-                camera,
                 surface_config,
                 window,
                 device,
@@ -154,9 +111,7 @@ impl Context {
                 surface,
                 sampler,
                 depth_texture_view,
-                global_bind_group,
-                global_bind_group_layout,
-                global_binding_offset,
+                global,
             },
             event_loop,
         )

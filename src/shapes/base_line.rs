@@ -62,7 +62,7 @@ impl BaseLine {
             .device
             .create_pipeline_layout(&PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&ctx.global_bind_group_layout],
+                bind_group_layouts: &[&ctx.global.bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -112,7 +112,7 @@ impl BaseLine {
                     sample_count: 1,
                 });
         render_bundle_encoder.set_pipeline(&render_pipeline);
-        render_bundle_encoder.set_bind_group(0, &ctx.global_bind_group, &[]);
+        render_bundle_encoder.set_bind_group(0, &ctx.global.bind_group, &[]);
         render_bundle_encoder.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_bundle_encoder.set_vertex_buffer(0, vertex_buffer.slice(..));
         render_bundle_encoder.draw_indexed(0..index_count, 0, 0..1);
