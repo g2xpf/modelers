@@ -76,17 +76,31 @@ impl Cube {
             });
 
         // create texture
-        let size = 256u32;
-        let raw_image = include_bytes!("cube/wood_256x256.png");
+        let raw_image = include_bytes!("cube/Wood_Floor_011_basecolor.png");
         let decoder = png::Decoder::new(Cursor::new(raw_image));
-        let (info, mut reader) = decoder.read_info().unwrap();
-        let mut buf = vec![0; info.buffer_size()];
-        reader.next_frame(&mut buf).unwrap();
+        let mut reader = decoder.read_info().unwrap();
+        let mut buf = vec![0; reader.output_buffer_size()];
+        let info = reader.next_frame(&mut buf).unwrap();
+        let image_buffer = &buf[..info.buffer_size()];
+
+        let texture_format = match info {
+            png::OutputInfo {
+                bit_depth,
+                color_type: png::ColorType::Rgba,
+                ..
+            } => match bit_depth {
+                png::BitDepth::Eight => Some(TextureFormat::Rgba8Uint),
+                png::BitDepth::Sixteen => Some(TextureFormat::Rgba16Uint),
+                _ => None,
+            },
+            _ => None,
+        };
+        let texture_format = texture_format.unwrap_or_else(|| panic!("info: {:?}", info));
 
         // let texels = create_texels(size as usize);
         let texture_extent = Extent3d {
-            width: size,
-            height: size,
+            width: info.width,
+            height: info.height,
             depth_or_array_layers: 1,
         };
         let texture = ctx.device.create_texture(&TextureDescriptor {
@@ -95,16 +109,16 @@ impl Cube {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: TextureFormat::R8Uint,
+            format: texture_format,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         });
         let texture_view = texture.create_view(&TextureViewDescriptor::default());
         ctx.queue.write_texture(
             texture.as_image_copy(),
-            &buf,
+            image_buffer,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(std::num::NonZeroU32::new(size).unwrap()),
+                bytes_per_row: Some(std::num::NonZeroU32::new(info.width * 4 /* Rgba */).unwrap()),
                 rows_per_image: None,
             },
             texture_extent,
