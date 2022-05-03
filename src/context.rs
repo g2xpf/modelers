@@ -1,7 +1,7 @@
-use winit::dpi::PhysicalSize;
+use winit::dpi::{LogicalSize, PhysicalSize};
 
 use winit::event_loop::EventLoop;
-use winit::window::Window;
+use winit::window::{Window, WindowBuilder};
 
 use wgpu::util;
 use wgpu::{
@@ -32,7 +32,11 @@ pub struct Context {
 impl Context {
     pub async fn create_context() -> (Context, EventLoop<()>) {
         let event_loop = EventLoop::new();
-        let window = Window::new(&event_loop).expect("Failed to create window");
+        let window = WindowBuilder::new()
+            .with_inner_size(LogicalSize::new(640, 360))
+            .build(&event_loop)
+            .expect("Failed to create window");
+        let window_size = window.inner_size();
 
         #[cfg(target_os = "macos")]
         let backends = Backends::METAL;
@@ -41,6 +45,7 @@ impl Context {
 
         let instance = Instance::new(backends);
         let size = window.inner_size();
+
         let surface = unsafe { instance.create_surface(&window) };
 
         let adapter =

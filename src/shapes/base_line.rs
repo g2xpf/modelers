@@ -52,7 +52,7 @@ impl BaseLine {
         let shader_module = ctx
             .device
             .create_shader_module(&wgpu::ShaderModuleDescriptor {
-                label: None,
+                label: Some("base_line/base_line.wgsl"),
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
                     "base_line/base_line.wgsl"
                 ))),
@@ -95,6 +95,7 @@ impl BaseLine {
                     entry_point: "fs_main",
                     targets: &[ctx.surface_config.format.into()],
                 }),
+                multiview: None,
             });
 
         let index_count = INDICES.len() as u32;
@@ -110,6 +111,7 @@ impl BaseLine {
                         stencil_read_only: true,
                     }),
                     sample_count: 1,
+                    ..wgpu::RenderBundleEncoderDescriptor::default()
                 });
         render_bundle_encoder.set_pipeline(&render_pipeline);
         render_bundle_encoder.set_bind_group(0, &ctx.global.bind_group, &[]);

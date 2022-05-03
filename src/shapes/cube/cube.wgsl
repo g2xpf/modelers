@@ -1,4 +1,3 @@
-[[block]]
 struct GlobalUniforms {
     vp_matrix: mat4x4<f32>;
     camera_position: vec3<f32>;
@@ -6,7 +5,6 @@ struct GlobalUniforms {
     inf_light_direction: vec3<f32>;
 };
 
-[[block]]
 struct LocalUniforms {
     model_matrix: mat4x4<f32>;
     model_matrix_inverted: mat4x4<f32>;

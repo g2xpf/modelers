@@ -12,10 +12,10 @@ mod polygon;
 use polygon::{Vertex, INDICES, VERTICES};
 use wgpu::{
     BindGroup, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType,
-    Buffer, BufferUsages, Extent3d, Face, Features, PipelineLayoutDescriptor, RenderBundle,
-    RenderBundleDescriptor, RenderBundleEncoderDescriptor, RenderPipeline, ShaderSource,
-    ShaderStages, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-    TextureViewDescriptor,
+    Buffer, BufferUsages, Extent3d, Face, Features, MultisampleState, PipelineLayoutDescriptor,
+    RenderBundle, RenderBundleDescriptor, RenderBundleEncoderDescriptor, RenderPipeline,
+    ShaderSource, ShaderStages, Texture, TextureDescriptor, TextureDimension, TextureFormat,
+    TextureUsages, TextureViewDescriptor,
 };
 
 fn create_texels(size: usize) -> Vec<u8> {
@@ -176,7 +176,7 @@ impl Cube {
         let shader = ctx
             .device
             .create_shader_module(&wgpu::ShaderModuleDescriptor {
-                label: None,
+                label: Some("cube/cube.wgsl"),
                 source: ShaderSource::Wgsl(Cow::Borrowed(include_str!("cube/cube.wgsl"))),
             });
 
@@ -229,7 +229,8 @@ impl Cube {
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState::default(),
                 }),
-                multisample: wgpu::MultisampleState::default(),
+                multisample: MultisampleState::default(),
+                multiview: None,
             });
 
         let pipeline_wire = ctx
@@ -275,6 +276,7 @@ impl Cube {
                             stencil: wgpu::StencilState::default(),
                             bias: wgpu::DepthBiasState::default(),
                         }),
+                        multiview: None,
                         multisample: wgpu::MultisampleState::default(),
                     })
             });
@@ -348,6 +350,7 @@ impl Cube {
                         stencil_read_only: true,
                     }),
                     sample_count: 1,
+                    multiview: None,
                 });
 
         render_bundle_encoder.set_pipeline(pipeline_cube);
