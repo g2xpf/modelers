@@ -83,7 +83,7 @@ impl Context {
             format: surface.get_preferred_format(&adapter).unwrap(),
             width: size.width,
             height: size.height,
-            present_mode: PresentMode::Mailbox,
+            present_mode: PresentMode::Fifo,
         };
 
         surface.configure(&device, &surface_config);
