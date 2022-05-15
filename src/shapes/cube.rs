@@ -338,9 +338,19 @@ impl Cube {
     }
 
     pub fn update(&mut self, queue: &wgpu::Queue) {
-        let delta_rotation =
-            Matrix4::from_axis_angle(Vector3::new(1.0, 1.0, 1.0).normalize(), Rad(PI / 180.0));
+        let delta_rotation = Matrix4::from_axis_angle(Vector3::new(0.0, 0.0, 1.0), Rad(0.3));
+        // let delta_rotation = Matrix4::from_axis_angle(
+        //     Vector3::new(1.0, 1.0, 1.0).normalize(),
+        //     Rad(PI / 180.0 / 5.0),
+        // );
+
         self.model_matrix = delta_rotation * self.model_matrix;
+        //
+        // self.model_matrix =
+        //     Matrix4::from_translation(Vector3::new(0.05, 0.0, 0.0)) * self.model_matrix;
+        // if self.model_matrix.w.x > 1.0 {
+        //     self.model_matrix.w.x = -1.0;
+        // }
         Self::update_inner(queue, &self.uniform_buffer, self.model_matrix);
     }
 
